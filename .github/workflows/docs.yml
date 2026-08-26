@@ -1,0 +1,61 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# Read-only by default; only the deploy job widens this to publish to Pages.
+permissions:
+  contents: read
+
+env:
+  BUN_VERSION: "1.3.9"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+        working-directory: website
+      # The asset-name pattern in src/lib/releases.ts is matched against what
+      # the release workflow uploads, and a mismatch is silent: the download
+      # buttons just fall back to the releases page.
+      - run: bun run test
+        working-directory: website
+      - run: bun run build
+        working-directory: website
+      - uses: actions/configure-pages@v5
+        if: github.event_name == 'push'
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name == 'push'
+        with:
+          path: website/build
+
+  deploy:
+    name: Deploy
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
