@@ -49,6 +49,16 @@ const config: Config = {
         href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
       },
     },
+    // Oswald backs the "What it does" deck's condensed display type. The deck
+    // prefers DIN (macOS) then Bahnschrift (Windows); Oswald is the fallback so
+    // visitors on other platforms still get a condensed grotesque, not Impact.
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500&display=swap',
+      },
+    },
   ],
 
   presets: [
@@ -83,6 +93,11 @@ const config: Config = {
           // link active when the path starts with its target, and '/' resolves
           // to the base URL, which prefixes the whole site.
           activeBaseRegex: `^${baseUrl}?$`,
+        },
+        {
+          to: '/what-it-does',
+          label: 'What it does',
+          position: 'right',
         },
         {
           to: '/downloads',
