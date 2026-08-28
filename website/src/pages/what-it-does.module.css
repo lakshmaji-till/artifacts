@@ -1,0 +1,9 @@
+.page {
+  padding: 3rem 0 5rem;
+}
+
+.lede {
+  max-width: 60ch;
+  margin-bottom: 2rem;
+  color: var(--ifm-color-emphasis-700);
+}
