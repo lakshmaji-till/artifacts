@@ -17,6 +17,46 @@ import {
 } from '@site/src/lib/releases';
 import styles from './downloads.module.css';
 
+/** Share glyph: three connected nodes, matching common OS share icons. */
+function ShareIcon(): ReactNode {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" />
+      <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+    </svg>
+  );
+}
+
+/** Checkmark shown briefly in place of {@link ShareIcon} after a copy. */
+function CheckIcon(): ReactNode {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
 /** Packs a version + channel into one opaque, URL-safe `?b=` token. */
 function encodeBuildId(version: string, channel: string): string {
   return btoa(`${version}|${channel}`)
@@ -153,24 +193,30 @@ export default function Downloads(): ReactNode {
               </div>
 
               {asset ? (
-                <>
-                  <table className={styles.assets}>
-                    <tbody>
-                      <tr>
-                        <td>
-                          <a href={asset.url}>{asset.name}</a>
-                        </td>
-                        <td className={styles.meta}>{formatSize(asset.size)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <button
-                    type="button"
-                    className={styles.shareLink}
-                    onClick={copyLink}>
-                    {copied ? 'Copied!' : 'Copy link to this build'}
-                  </button>
-                </>
+                <table className={styles.assets}>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <a href={asset.url}>{asset.name}</a>
+                      </td>
+                      <td className={styles.meta}>{formatSize(asset.size)}</td>
+                      <td className={styles.shareCell}>
+                        <button
+                          type="button"
+                          className={styles.shareButton}
+                          aria-label={
+                            copied ? 'Link copied' : 'Copy link to this build'
+                          }
+                          title={
+                            copied ? 'Link copied' : 'Copy link to this build'
+                          }
+                          onClick={copyLink}>
+                          {copied ? <CheckIcon /> : <ShareIcon />}
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               ) : (
                 <p>
                   Nothing for {envLabel(env)} in v
