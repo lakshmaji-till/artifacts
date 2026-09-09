@@ -85,20 +85,26 @@
   font-size: 0.85rem;
 }
 
-.shareLink {
-  margin-top: 0.75rem;
-  padding: 0.35rem 0.9rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 999px;
+.shareCell {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.shareButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: none;
-  color: inherit;
-  font: inherit;
-  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
   cursor: pointer;
 }
 
-.shareLink:hover {
-  border-color: var(--ifm-color-primary);
+.shareButton:hover {
+  background: var(--ifm-color-emphasis-100);
   color: var(--ifm-color-primary);
 }
 
