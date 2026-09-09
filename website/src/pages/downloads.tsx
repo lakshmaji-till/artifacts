@@ -17,6 +17,27 @@ import {
 } from '@site/src/lib/releases';
 import styles from './downloads.module.css';
 
+/** Packs a version + channel into one opaque, URL-safe `?b=` token. */
+function encodeBuildId(version: string, channel: string): string {
+  return btoa(`${version}|${channel}`)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+/** Reverses {@link encodeBuildId}, or returns null if `id` isn't one of ours. */
+function decodeBuildId(id: string | null): {v: string; channel: string} | null {
+  if (!id) return null;
+  try {
+    const base64 = id.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const [v, channel] = atob(padded).split('|');
+    return v && channel ? {v, channel} : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Downloads(): ReactNode {
   const [releases, setReleases] = useState<Release[] | null>(null);
   const [pending, setPending] = useState(true);
@@ -25,6 +46,7 @@ export default function Downloads(): ReactNode {
   // index survives that fine since the list itself never reorders in place.
   const [selected, setSelected] = useState(0);
   const [env, setEnv] = useState(DEFAULT_ENV);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -37,8 +59,51 @@ export default function Downloads(): ReactNode {
     };
   }, []);
 
+  // Pick up a shared link's ?b=<id> once the release list is in, so the page
+  // lands directly on the build it points at instead of the default.
+  useEffect(() => {
+    if (!releases) return;
+    const build = decodeBuildId(
+      new URLSearchParams(window.location.search).get('b'),
+    );
+    if (!build) return;
+    const index = releases.findIndex(
+      (r) => releaseVersion(r) === build.v || r.tag === build.v,
+    );
+    if (index !== -1) setSelected(index);
+    if (ENVIRONMENTS.some((e) => e.value === build.channel)) {
+      setEnv(build.channel);
+    }
+    // Only meant to run once, when the release list first arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [releases]);
+
   const release = releases?.[selected];
   const asset = release && installerFor(release, env);
+  const version = release && (releaseVersion(release) ?? release.tag);
+
+  // Keep the address bar in sync with the current selection, so it's always
+  // what "Copy link" would produce — and reload-safe without extra clicks.
+  useEffect(() => {
+    if (!version) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('b', encodeBuildId(version, env));
+    window.history.replaceState(null, '', url);
+  }, [version, env]);
+
+  function copyLink() {
+    if (!version) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('b', encodeBuildId(version, env));
+    const link = url.toString();
+    navigator.clipboard
+      .writeText(link)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => window.prompt('Copy this link:', link));
+  }
 
   return (
     <Layout
@@ -88,16 +153,24 @@ export default function Downloads(): ReactNode {
               </div>
 
               {asset ? (
-                <table className={styles.assets}>
-                  <tbody>
-                    <tr>
-                      <td>
-                        <a href={asset.url}>{asset.name}</a>
-                      </td>
-                      <td className={styles.meta}>{formatSize(asset.size)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <>
+                  <table className={styles.assets}>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <a href={asset.url}>{asset.name}</a>
+                        </td>
+                        <td className={styles.meta}>{formatSize(asset.size)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <button
+                    type="button"
+                    className={styles.shareLink}
+                    onClick={copyLink}>
+                    {copied ? 'Copied!' : 'Copy link to this build'}
+                  </button>
+                </>
               ) : (
                 <p>
                   Nothing for {envLabel(env)} in v

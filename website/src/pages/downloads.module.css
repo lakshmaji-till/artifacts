@@ -85,6 +85,23 @@
   font-size: 0.85rem;
 }
 
+.shareLink {
+  margin-top: 0.75rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.shareLink:hover {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+}
+
 /* The version column turns into a scrolling strip rather than stacking, so the
    asset list stays above the fold on a phone. */
 @media screen and (max-width: 996px) {
