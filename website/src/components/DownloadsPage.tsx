@@ -1,4 +1,4 @@
-import {useEffect, useState, type ReactNode} from 'react';
+import {useCallback, useEffect, useRef, useState, type ReactNode} from 'react';
 import clsx from 'clsx';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
@@ -9,7 +9,7 @@ import {
   displayVersion,
   ENVIRONMENTS,
   envLabel,
-  fetchReleases,
+  fetchReleasesPage,
   formatBuiltAt,
   formatSize,
   installerFor,
@@ -22,6 +22,14 @@ import {
   type Release,
 } from '@site/src/lib/releases';
 import styles from './DownloadsPage.module.css';
+
+/**
+ * Releases per GitHub raw-feed page. Small enough that a scroll through a
+ * typical history costs single-digit requests against the unauthenticated
+ * 60-per-hour budget, big enough that a page usually has at least one match
+ * for either app (their releases are interleaved in one feed).
+ */
+const RAW_PAGE_SIZE = 10;
 
 /** Share glyph: three connected nodes, matching common OS share icons. */
 function ShareIcon(): ReactNode {
@@ -112,45 +120,122 @@ function decodeBuildId(id: string | null): {v: string; channel: string} | null {
  * the environment once, then every row's download button follows it.
  */
 export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
-  const [releases, setReleases] = useState<Release[] | null>(null);
+  // Releases matching this app, accumulated across raw GitHub pages —
+  // pos/orbit releases are interleaved in one feed, so a raw page can
+  // contribute zero, one, or many rows here.
+  const [releases, setReleases] = useState<Release[]>([]);
+  const [rawPage, setRawPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [pending, setPending] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [env, setEnv] = useState(DEFAULT_ENV);
   // Which row's share button last copied a link, so only that one flips to a
   // checkmark rather than every row on the page.
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
   // A shared link's build, highlighted once the matching row renders.
   const [highlightTag, setHighlightTag] = useState<string | null>(null);
+  // A shared link's ?b=<id> target, kept around until its row has loaded (or
+  // the feed runs out) so pagination can be driven to find it automatically.
+  const [pendingBuild, setPendingBuild] = useState<{v: string; channel: string} | null>(null);
 
+  const liveRef = useRef(true);
+  const loadingRef = useRef(false);
+
+  const loadNextPage = useCallback(
+    (page: number) => {
+      if (loadingRef.current) return;
+      loadingRef.current = true;
+      setLoadingMore(true);
+      fetchReleasesPage(page, RAW_PAGE_SIZE)
+        .then(({releases: raw, hasMore: more}) => {
+          if (!liveRef.current) return;
+          setReleases((prev) => [...prev, ...releasesForApp(raw, app)]);
+          setRawPage(page + 1);
+          setHasMore(more);
+          setLoadMoreFailed(false);
+        })
+        .catch(() => {
+          if (!liveRef.current) return;
+          if (page === 1) setFailed(true);
+          else setLoadMoreFailed(true);
+        })
+        .finally(() => {
+          loadingRef.current = false;
+          if (liveRef.current) {
+            setLoadingMore(false);
+            setPending(false);
+          }
+        });
+    },
+    [app],
+  );
+
+  // Resets pagination whenever the app changes — otherwise switching from
+  // pos to orbit would resume from wherever pos's raw-page cursor left off,
+  // silently skipping raw pages orbit needed to see.
   useEffect(() => {
-    let live = true;
-    fetchReleases()
-      .then((rs) => live && setReleases(releasesForApp(rs, app)))
-      .catch(() => live && setFailed(true))
-      .finally(() => live && setPending(false));
+    liveRef.current = true;
+    setReleases([]);
+    setRawPage(1);
+    setHasMore(true);
+    setPending(true);
+    setFailed(false);
+    setLoadMoreFailed(false);
+    setHighlightTag(null);
+    setPendingBuild(
+      decodeBuildId(new URLSearchParams(window.location.search).get('b')),
+    );
+    loadNextPage(1);
     return () => {
-      live = false;
+      liveRef.current = false;
     };
-  }, [app]);
+  }, [app, loadNextPage]);
 
-  // Pick up a shared link's ?b=<id> once the release list is in, so the page
-  // highlights the build it points at instead of leaving someone to hunt.
+  // Loads more raw pages, scroll position aside, while a shared ?b=<id>
+  // link's target hasn't shown up yet — so a shared link resolves without
+  // the visitor needing to scroll to trigger the sentinel below. Stops once
+  // found, or once the feed is exhausted (hasMore false).
   useEffect(() => {
-    if (!releases) return;
-    const build = decodeBuildId(
-      new URLSearchParams(window.location.search).get('b'),
-    );
-    if (!build) return;
+    if (!pendingBuild) return;
     const match = releases.find(
-      (r) => releaseVersion(app, r) === build.v || r.tag === build.v,
+      (r) => releaseVersion(app, r) === pendingBuild.v || r.tag === pendingBuild.v,
     );
-    if (match) setHighlightTag(match.tag);
-    if (app.hasEnvironments && ENVIRONMENTS.some((e) => e.value === build.channel)) {
-      setEnv(build.channel);
+    if (match) {
+      setHighlightTag(match.tag);
+      if (
+        app.hasEnvironments &&
+        ENVIRONMENTS.some((e) => e.value === pendingBuild.channel)
+      ) {
+        setEnv(pendingBuild.channel);
+      }
+      setPendingBuild(null);
+      return;
     }
-    // Only meant to run once, when the release list first arrives.
+    if (!hasMore) {
+      setPendingBuild(null);
+      return;
+    }
+    loadNextPage(rawPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [releases]);
+  }, [releases, hasMore]);
+
+  // Fetches the next page once the sentinel row scrolls near the viewport.
+  const sentinelRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (!hasMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadNextPage(rawPage);
+      },
+      {rootMargin: '200px'},
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, rawPage, loadNextPage]);
 
   // Triggers the download from a real <button>, not a visible <a> — so
   // hovering it never shows the asset's raw URL in the browser's link
@@ -195,7 +280,7 @@ export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
           </p>
         )}
 
-        {releases && app.hasEnvironments && (
+        {!pending && !failed && app.hasEnvironments && (
           <div className={styles.filtersGroup}>
             <span className={styles.panelLabel}>Environment</span>
             <div className={styles.filters}>
@@ -212,7 +297,7 @@ export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
           </div>
         )}
 
-        {releases && (
+        {!pending && !failed && (
           <div className={styles.versionsPanel}>
             <span className={styles.panelLabel}>Versions</span>
             <ul className={styles.versions}>
@@ -291,7 +376,21 @@ export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
                   </li>
                 );
               })}
+              {hasMore && (
+                <li ref={sentinelRef} className={styles.sentinel} aria-hidden="true" />
+              )}
             </ul>
+            {loadingMore && (
+              <p className={styles.loadingMore}>Loading more…</p>
+            )}
+            {loadMoreFailed && (
+              <p className={styles.loadMoreFailed}>
+                Couldn't load more releases.{' '}
+                <button type="button" onClick={() => loadNextPage(rawPage)}>
+                  Try again
+                </button>
+              </p>
+            )}
           </div>
         )}
       </div>

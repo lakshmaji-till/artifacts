@@ -1,5 +1,5 @@
 .page {
-  padding: 3rem 0 5rem;
+  padding: 3rem 3rem 5rem;
 }
 
 .panelLabel {
@@ -33,8 +33,12 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 1rem;
-  min-height: 2.75rem;
-  padding: 0.6rem 0.75rem;
+  /* Tall enough to fit the download button (its own padding pushes it past
+     2.75rem) plus row padding without growing — otherwise rows with a
+     download/share action render taller than "Not built"/"Not available"
+     rows, which visibly stair-steps the list, especially on hover. */
+  min-height: 3.45rem;
+  padding: 0.4rem 0.75rem;
   border-radius: 8px;
 }
 
@@ -181,6 +185,37 @@
 .shareButton:hover {
   background: var(--ifm-color-emphasis-100);
   color: var(--ifm-color-primary);
+}
+
+.sentinel {
+  min-height: 1px;
+}
+
+.loadingMore,
+.loadMoreFailed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.loadMoreFailed button {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  background: none;
+  color: var(--ifm-color-primary);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+}
+
+.loadMoreFailed button:hover {
+  background: var(--ifm-color-emphasis-100);
 }
 
 /* Rows wrap onto a second line on narrow screens rather than overflowing the

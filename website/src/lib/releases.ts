@@ -174,7 +174,8 @@ type GhRelease = {
 };
 
 /**
- * fetchReleases returns the published releases, newest first by publish time.
+ * Maps a raw GitHub API response body to the published releases, newest
+ * first by publish time.
  *
  * The GitHub API's own ordering is by `created_at`, which this repo's
  * releases all share a single value for (they were bulk-created, then
@@ -186,15 +187,7 @@ type GhRelease = {
  * Drafts and prereleases are dropped — the download page should never offer
  * a build nobody's meant to install yet.
  */
-export async function fetchReleases(limit = 30): Promise<Release[]> {
-  const resp = await fetch(
-    `https://api.github.com/repos/${REPO}/releases?per_page=${limit}`,
-    {headers: {Accept: 'application/vnd.github+json'}},
-  );
-  if (!resp.ok) {
-    throw new Error(`GitHub returned ${resp.status}`);
-  }
-  const body: GhRelease[] = await resp.json();
+function toReleases(body: GhRelease[]): Release[] {
   return body
     .filter((r) => !r.draft && !r.prerelease)
     .map((r) => ({
@@ -207,6 +200,46 @@ export async function fetchReleases(limit = 30): Promise<Release[]> {
       })),
     }))
     .sort((a, b) => b.published.localeCompare(a.published));
+}
+
+export async function fetchReleases(limit = 30): Promise<Release[]> {
+  const resp = await fetch(
+    `https://api.github.com/repos/${REPO}/releases?per_page=${limit}`,
+    {headers: {Accept: 'application/vnd.github+json'}},
+  );
+  if (!resp.ok) {
+    throw new Error(`GitHub returned ${resp.status}`);
+  }
+  return toReleases(await resp.json());
+}
+
+export type ReleasesPage = {releases: Release[]; hasMore: boolean};
+
+/** True if a GitHub `Link` response header advertises a `rel="next"` page. */
+function hasNextPage(link: string | null): boolean {
+  return !!link && /<[^>]*>;\s*rel="next"/.test(link);
+}
+
+/**
+ * One raw page of the GitHub releases feed — not filtered to any app, since
+ * `pos` and `orbit` releases are interleaved in the same feed and GitHub has
+ * no per-app filter. Callers paging through a specific app's releases must
+ * keep pulling pages themselves (via `releasesForApp`) until they have
+ * enough matches or `hasMore` is false.
+ */
+export async function fetchReleasesPage(
+  page: number,
+  perPage = 10,
+): Promise<ReleasesPage> {
+  const resp = await fetch(
+    `https://api.github.com/repos/${REPO}/releases?per_page=${perPage}&page=${page}`,
+    {headers: {Accept: 'application/vnd.github+json'}},
+  );
+  if (!resp.ok) {
+    throw new Error(`GitHub returned ${resp.status}`);
+  }
+  const releases = toReleases(await resp.json());
+  return {releases, hasMore: hasNextPage(resp.headers.get('Link'))};
 }
 
 /** "36.3 MB" — release artifacts are always megabytes, so one unit is enough. */

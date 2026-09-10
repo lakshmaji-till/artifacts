@@ -6,6 +6,7 @@ import {
   ENVIRONMENTS,
   envLabel,
   fetchReleases,
+  fetchReleasesPage,
   formatBuiltAt,
   installerFor,
   latestInstallers,
@@ -378,4 +379,79 @@ test('fetchReleases sorts by published_at, not API order or version number', asy
     'oolio-pos-app-v7.41.25',
     'oolio-pos-app-v7.41.9',
   ]);
+});
+
+test('fetchReleasesPage requests the given page and per_page', async () => {
+  let requestedUrl: string | undefined;
+  globalThis.fetch = (async (url: string) => {
+    requestedUrl = url;
+    return new Response(JSON.stringify([]));
+  }) as typeof fetch;
+
+  await fetchReleasesPage(3, 10);
+  expect(requestedUrl).toContain('per_page=10');
+  expect(requestedUrl).toContain('page=3');
+});
+
+test('fetchReleasesPage reports hasMore from a Link rel="next" header', async () => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify([]), {
+      headers: {
+        Link: '<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=5>; rel="last"',
+      },
+    })) as typeof fetch;
+
+  const {hasMore} = await fetchReleasesPage(1);
+  expect(hasMore).toBe(true);
+});
+
+test('fetchReleasesPage reports hasMore false on the last page', async () => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify([]), {
+      headers: {
+        Link: '<https://api.github.com/x?page=1>; rel="prev", <https://api.github.com/x?page=1>; rel="first"',
+      },
+    })) as typeof fetch;
+
+  const {hasMore} = await fetchReleasesPage(2);
+  expect(hasMore).toBe(false);
+});
+
+test('fetchReleasesPage reports hasMore false when no Link header is present', async () => {
+  globalThis.fetch = (async () => new Response(JSON.stringify([]))) as typeof fetch;
+
+  const {hasMore} = await fetchReleasesPage(1);
+  expect(hasMore).toBe(false);
+});
+
+test('fetchReleasesPage filters and sorts releases like fetchReleases', async () => {
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify([
+        {
+          tag_name: 'oolio-pos-app-v7.41.22',
+          published_at: '2026-08-26T10:11:51Z',
+          draft: false,
+          prerelease: false,
+          assets: [],
+        },
+        {
+          tag_name: 'oolio-pos-app-v7.41.24-draft',
+          published_at: '2026-08-27T01:00:00Z',
+          draft: true,
+          prerelease: false,
+          assets: [],
+        },
+      ]),
+    )) as typeof fetch;
+
+  const {releases} = await fetchReleasesPage(1);
+  expect(releases.map((r) => r.tag)).toEqual(['oolio-pos-app-v7.41.22']);
+});
+
+test('fetchReleasesPage throws on a non-ok response', async () => {
+  globalThis.fetch = (async () =>
+    new Response('', {status: 403})) as typeof fetch;
+
+  await expect(fetchReleasesPage(1)).rejects.toThrow('GitHub returned 403');
 });
