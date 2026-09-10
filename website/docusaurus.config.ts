@@ -2,13 +2,15 @@ import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
+import appsData from './src/lib/apps.json';
+
 const baseUrl = '/artifacts/';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'POS Desktop',
-  tagline: 'Download the POS Desktop installer for your environment.',
+  title: 'Oolio Artifacts',
+  tagline: 'Download Oolio app installers for your environment.',
   favicon: 'img/favicon.ico',
 
   future: {
@@ -81,13 +83,13 @@ const config: Config = {
     },
     navbar: {
       logo: {
-        alt: 'POS Desktop',
+        alt: 'Oolio Artifacts',
         src: 'img/logo.png',
       },
       items: [
         {
           to: '/',
-          label: 'POS Desktop',
+          label: 'Oolio Artifacts',
           position: 'left',
           // Without this the item is active on every page: Docusaurus marks a
           // link active when the path starts with its target, and '/' resolves
@@ -100,10 +102,14 @@ const config: Config = {
           position: 'right',
         },
         {
-          to: '/downloads',
+          type: 'dropdown',
           label: 'Download',
           position: 'right',
           className: 'navbar-sponsor',
+          items: appsData.apps.map((app) => ({
+            to: `/downloads/${app.id}`,
+            label: app.label,
+          })),
         },
         {
           href: 'https://github.com/lakshmaji-till/artifacts',

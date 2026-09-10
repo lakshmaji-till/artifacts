@@ -6,6 +6,8 @@
 // release ships. The API call happens on page load instead, at the same
 // unauthenticated 60-per-hour budget any anonymous caller gets.
 
+import appsData from './apps.json';
+
 export const REPO = 'lakshmaji-till/artifacts';
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 export const LATEST_URL = `${RELEASES_URL}/latest`;
@@ -27,27 +29,69 @@ export type Installer = {
   env: string;
   version: string;
   asset: Asset;
+  /** When the release workflow built this asset, if its name encodes one. */
+  builtAt?: Date;
 };
 
-// build.yml names Windows installers POS-<env>-<version>-<buildTimestamp>-installer.exe,
-// e.g. POS-test-in-7.41.22-1787738273-installer.exe. Everything else a release
-// carries (POS.exe, pos-manifest.json) is for the in-app updater, not someone
-// installing fresh, and is ignored here.
-const INSTALLER_NAME = /^POS-(.+)-(\d+\.\d+\.\d+)-\d+-installer\.exe$/;
+/**
+ * One publishable app in this repo's release feed. `tagPrefix` decides which
+ * release tags belong to it; `assetPattern` decides which asset in a matching
+ * release is the installer to offer, compiled into a RegExp with named
+ * capture groups — `version` (required), and optionally `env` and
+ * `timestamp` for apps that have them.
+ */
+export type AppConfig = {
+  id: string;
+  label: string;
+  /** Short form for tight spaces, e.g. a "Download {shortLabel}" button. */
+  shortLabel: string;
+  tagPrefix: string;
+  assetPattern: string;
+  hasEnvironments: boolean;
+};
 
-/** Parses an asset name into its environment and version, or null if it isn't an installer. */
-export function parseInstaller(
-  name: string,
-): {env: string; version: string} | null {
-  const match = INSTALLER_NAME.exec(name);
-  if (!match) return null;
-  return {env: match[1], version: match[2]};
+export const APPS: AppConfig[] = appsData.apps;
+
+/** The releases belonging to `app`, going by tag prefix. */
+export function releasesForApp(releases: Release[], app: AppConfig): Release[] {
+  return releases.filter((r) => r.tag.startsWith(app.tagPrefix));
 }
 
 /**
- * The environments a build can ship to, in the order they appear as filter
- * pills. The label is what a person picking an installer sees; the value is
- * the `<env>` segment build.yml bakes into the asset name.
+ * The version to display for a release: read off its installer asset where
+ * possible, falling back to its tag with `app.tagPrefix` stripped — so a
+ * release that shipped no matching installer still reads as a bare version
+ * number instead of the raw, prefix-and-letters tag.
+ */
+export function displayVersion(app: AppConfig, release: Release): string {
+  return (
+    releaseVersion(app, release) ??
+    (release.tag.startsWith(app.tagPrefix)
+      ? release.tag.slice(app.tagPrefix.length)
+      : release.tag)
+  );
+}
+
+/** Parses an asset name into its environment, version and build time, or null if it isn't an installer. */
+export function parseInstaller(
+  app: AppConfig,
+  name: string,
+): {env: string; version: string; builtAt?: Date} | null {
+  const match = new RegExp(app.assetPattern).exec(name);
+  if (!match?.groups?.version) return null;
+  const {env, version, timestamp} = match.groups;
+  return {
+    env: env ?? '',
+    version,
+    builtAt: timestamp ? new Date(Number(timestamp) * 1000) : undefined,
+  };
+}
+
+/**
+ * The environments an env-scoped app (`hasEnvironments: true`) can ship to,
+ * in the order they appear as filter pills. The label is what a person
+ * picking an installer sees; the value is the `<env>` segment a release
+ * workflow bakes into the asset name.
  */
 export const ENVIRONMENTS: {label: string; value: string}[] = [
   {label: 'Production', value: 'prod-green'},
@@ -62,15 +106,26 @@ export function envLabel(env: string): string {
   return ENVIRONMENTS.find((e) => e.value === env)?.label ?? env;
 }
 
-/** The Windows installer asset for `env` in `release`, if that release shipped one. */
-export function installerFor(release: Release, env: string): Asset | undefined {
-  return release.assets.find((a) => parseInstaller(a.name)?.env === env);
+/**
+ * The Windows installer asset for `app` in `release`. For apps without
+ * environments, `env` is ignored — there's only ever one installer to find.
+ */
+export function installerFor(
+  app: AppConfig,
+  release: Release,
+  env?: string,
+): Asset | undefined {
+  return release.assets.find((a) => {
+    const parsed = parseInstaller(app, a.name);
+    if (!parsed) return false;
+    return app.hasEnvironments ? parsed.env === env : true;
+  });
 }
 
 /** The version a release shipped, read off its installer asset rather than its tag. */
-export function releaseVersion(release: Release): string | null {
+export function releaseVersion(app: AppConfig, release: Release): string | null {
   for (const asset of release.assets) {
-    const parsed = parseInstaller(asset.name);
+    const parsed = parseInstaller(app, asset.name);
     if (parsed) return parsed.version;
   }
   return null;
@@ -86,13 +141,18 @@ export function releaseVersion(release: Release): string | null {
  * leads. Environments outside that list — none expected, but the parser
  * doesn't reject them — sort after the known ones, alphabetically.
  */
-export function latestInstallers(releases: Release[]): Installer[] {
+export function latestInstallers(app: AppConfig, releases: Release[]): Installer[] {
   const byEnv = new Map<string, Installer>();
   for (const release of releases) {
     for (const asset of release.assets) {
-      const parsed = parseInstaller(asset.name);
+      const parsed = parseInstaller(app, asset.name);
       if (!parsed || byEnv.has(parsed.env)) continue;
-      byEnv.set(parsed.env, {env: parsed.env, version: parsed.version, asset});
+      byEnv.set(parsed.env, {
+        env: parsed.env,
+        version: parsed.version,
+        asset,
+        builtAt: parsed.builtAt,
+      });
     }
   }
   const priority = (env: string) => {
@@ -152,4 +212,12 @@ export async function fetchReleases(limit = 30): Promise<Release[]> {
 /** "36.3 MB" — release artifacts are always megabytes, so one unit is enough. */
 export function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** "9 Sep 2026, 3:15 pm" — the build timestamp baked into an installer's name, made readable. */
+export function formatBuiltAt(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
 }

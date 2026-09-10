@@ -44,8 +44,10 @@
   color: var(--ifm-color-emphasis-600);
 }
 
-.more {
-  margin-top: 2.5rem;
-  font-size: 0.85rem;
-  color: var(--ifm-color-emphasis-600);
+.apps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
 }
