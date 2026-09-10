@@ -1,0 +1,20 @@
+{
+  "apps": [
+    {
+      "id": "pos",
+      "label": "POS Desktop",
+      "shortLabel": "POS",
+      "tagPrefix": "oolio-pos-app-v",
+      "assetPattern": "^POS-(?<env>.+)-(?<version>\\d+\\.\\d+\\.\\d+)-(?<timestamp>\\d+)-installer\\.exe$",
+      "hasEnvironments": true
+    },
+    {
+      "id": "orbit",
+      "label": "Orbit",
+      "shortLabel": "Orbit",
+      "tagPrefix": "oolio-orbit-",
+      "assetPattern": "^Orbit-Windows-Setup-(?<version>\\d+\\.\\d+\\.\\d+(?:-[\\w.]+)?)\\.exe$",
+      "hasEnvironments": false
+    }
+  ]
+}

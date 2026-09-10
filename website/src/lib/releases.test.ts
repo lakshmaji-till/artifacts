@@ -2,28 +2,97 @@ import {expect, test} from 'bun:test';
 
 import {
   DEFAULT_ENV,
+  displayVersion,
   ENVIRONMENTS,
   envLabel,
   fetchReleases,
+  formatBuiltAt,
   installerFor,
   latestInstallers,
   parseInstaller,
+  releasesForApp,
   releaseVersion,
+  type AppConfig,
   type Release,
 } from './releases';
 
+const POS: AppConfig = {
+  id: 'pos',
+  label: 'POS Desktop',
+  shortLabel: 'POS',
+  tagPrefix: 'oolio-pos-app-v',
+  assetPattern:
+    '^POS-(?<env>.+)-(?<version>\\d+\\.\\d+\\.\\d+)-(?<timestamp>\\d+)-installer\\.exe$',
+  hasEnvironments: true,
+};
+
+const ORBIT: AppConfig = {
+  id: 'orbit',
+  label: 'Orbit',
+  shortLabel: 'Orbit',
+  tagPrefix: 'oolio-orbit-',
+  assetPattern:
+    '^Orbit-Windows-Setup-(?<version>\\d+\\.\\d+\\.\\d+(?:-[\\w.]+)?)\\.exe$',
+  hasEnvironments: false,
+};
+
 test('parseInstaller extracts env and version from an installer name', () => {
   expect(
-    parseInstaller('POS-test-in-7.41.22-1787738273-installer.exe'),
-  ).toEqual({env: 'test-in', version: '7.41.22'});
+    parseInstaller(POS, 'POS-test-in-7.41.22-1787738273-installer.exe'),
+  ).toMatchObject({env: 'test-in', version: '7.41.22'});
   expect(
-    parseInstaller('POS-prod-7.42.0-1787999999-installer.exe'),
-  ).toEqual({env: 'prod', version: '7.42.0'});
+    parseInstaller(POS, 'POS-prod-7.42.0-1787999999-installer.exe'),
+  ).toMatchObject({env: 'prod', version: '7.42.0'});
 });
 
 test('parseInstaller ignores non-installer assets', () => {
-  expect(parseInstaller('POS.exe')).toBeNull();
-  expect(parseInstaller('pos-manifest.json')).toBeNull();
+  expect(parseInstaller(POS, 'POS.exe')).toBeNull();
+  expect(parseInstaller(POS, 'pos-manifest.json')).toBeNull();
+});
+
+test('parseInstaller reads a version-only match for apps without environments', () => {
+  expect(parseInstaller(ORBIT, 'Orbit-Windows-Setup-0.40.2.exe')).toEqual({
+    env: '',
+    version: '0.40.2',
+    builtAt: undefined,
+  });
+  expect(
+    parseInstaller(ORBIT, 'Orbit-Windows-Setup-0.40.0-alpha.33.exe'),
+  ).toEqual({env: '', version: '0.40.0-alpha.33', builtAt: undefined});
+  expect(parseInstaller(ORBIT, 'Orbit-Windows-0.40.2.zip')).toBeNull();
+  expect(parseInstaller(ORBIT, 'Orbit-0.40.2.dmg')).toBeNull();
+});
+
+test('parseInstaller reads the build timestamp for apps that encode one', () => {
+  const parsed = parseInstaller(
+    POS,
+    'POS-test-in-7.41.22-1787738273-installer.exe',
+  );
+  expect(parsed?.builtAt).toEqual(new Date(1787738273 * 1000));
+});
+
+test('parseInstaller leaves builtAt undefined when the pattern has no timestamp group', () => {
+  const parsed = parseInstaller(ORBIT, 'Orbit-Windows-Setup-0.40.2.exe');
+  expect(parsed?.builtAt).toBeUndefined();
+});
+
+test('formatBuiltAt renders a build timestamp as a readable date and time', () => {
+  const formatted = formatBuiltAt(new Date(1787738273 * 1000));
+  // Locale-dependent, so assert on shape rather than an exact string.
+  expect(formatted).toMatch(/2026/);
+});
+
+test('releasesForApp filters releases by tag prefix', () => {
+  const releases: Release[] = [
+    {tag: 'oolio-pos-app-v7.41.22', published: '', assets: []},
+    {tag: 'oolio-orbit-0.40.2', published: '', assets: []},
+  ];
+  expect(releasesForApp(releases, POS).map((r) => r.tag)).toEqual([
+    'oolio-pos-app-v7.41.22',
+  ]);
+  expect(releasesForApp(releases, ORBIT).map((r) => r.tag)).toEqual([
+    'oolio-orbit-0.40.2',
+  ]);
 });
 
 test('latestInstallers picks the newest release per environment', () => {
@@ -54,7 +123,7 @@ test('latestInstallers picks the newest release per environment', () => {
     },
   ];
 
-  const installers = latestInstallers(releases);
+  const installers = latestInstallers(POS, releases);
   expect(installers).toHaveLength(1);
   expect(installers[0]).toMatchObject({env: 'test-in', version: '7.41.22'});
 });
@@ -98,12 +167,33 @@ test('latestInstallers keeps each environment separate, Production first', () =>
     },
   ];
 
-  const installers = latestInstallers(releases);
+  const installers = latestInstallers(POS, releases);
   expect(installers.map((i) => i.env)).toEqual([
     'prod-green',
     'prod-blue',
     'test-in',
   ]);
+});
+
+test('latestInstallers returns a single entry for an app without environments', () => {
+  const releases: Release[] = [
+    {
+      tag: 'oolio-orbit-0.40.2',
+      published: '2026-08-26T10:11:51Z',
+      assets: [
+        {
+          name: 'Orbit-Windows-Setup-0.40.2.exe',
+          url: 'https://x/Orbit-Windows-Setup-0.40.2.exe',
+          size: 1,
+        },
+        {name: 'Orbit-0.40.2.dmg', url: 'https://x/Orbit-0.40.2.dmg', size: 1},
+      ],
+    },
+  ];
+
+  const installers = latestInstallers(ORBIT, releases);
+  expect(installers).toHaveLength(1);
+  expect(installers[0]).toMatchObject({env: '', version: '0.40.2'});
 });
 
 test('envLabel maps known environments and falls back to the raw value', () => {
@@ -131,10 +221,28 @@ test('installerFor finds the asset for an environment, or nothing', () => {
     ],
   };
 
-  expect(installerFor(release, 'test-in')?.name).toBe(
+  expect(installerFor(POS, release, 'test-in')?.name).toBe(
     'POS-test-in-7.41.22-1787738273-installer.exe',
   );
-  expect(installerFor(release, 'prod-green')).toBeUndefined();
+  expect(installerFor(POS, release, 'prod-green')).toBeUndefined();
+});
+
+test('installerFor ignores env for apps without environments', () => {
+  const release: Release = {
+    tag: 'oolio-orbit-0.40.2',
+    published: '2026-08-26T10:11:51Z',
+    assets: [
+      {
+        name: 'Orbit-Windows-Setup-0.40.2.exe',
+        url: 'https://x/Orbit-Windows-Setup-0.40.2.exe',
+        size: 1,
+      },
+    ],
+  };
+
+  expect(installerFor(ORBIT, release)?.name).toBe(
+    'Orbit-Windows-Setup-0.40.2.exe',
+  );
 });
 
 test('releaseVersion reads the version off the installer asset', () => {
@@ -150,8 +258,34 @@ test('releaseVersion reads the version off the installer asset', () => {
       },
     ],
   };
-  expect(releaseVersion(release)).toBe('7.41.22');
-  expect(releaseVersion({tag: 'empty', published: '', assets: []})).toBeNull();
+  expect(releaseVersion(POS, release)).toBe('7.41.22');
+  expect(
+    releaseVersion(POS, {tag: 'empty', published: '', assets: []}),
+  ).toBeNull();
+});
+
+test('displayVersion prefers the installer version over the tag', () => {
+  const release: Release = {
+    tag: 'oolio-pos-app-v7.41.22',
+    published: '2026-08-26T10:11:51Z',
+    assets: [
+      {
+        name: 'POS-test-in-7.41.22-1787738273-installer.exe',
+        url: 'https://x/test-in.exe',
+        size: 1,
+      },
+    ],
+  };
+  expect(displayVersion(POS, release)).toBe('7.41.22');
+});
+
+test('displayVersion falls back to the tag with the app prefix stripped, not the raw tag', () => {
+  const release: Release = {
+    tag: 'oolio-pos-app-v7.443.2',
+    published: '2026-08-26T10:11:51Z',
+    assets: [],
+  };
+  expect(displayVersion(POS, release)).toBe('7.443.2');
 });
 
 test('fetchReleases drops drafts and prereleases', async () => {
