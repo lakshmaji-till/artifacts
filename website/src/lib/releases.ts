@@ -102,6 +102,29 @@ export const ENVIRONMENTS: {label: string; value: string}[] = [
 /** Production first — that's the build most people asking for "the download" want. */
 export const DEFAULT_ENV = ENVIRONMENTS[0].value;
 
+/**
+ * Friendly aliases for the `?environment=` query param, so a shared link can
+ * read `?environment=preprod` instead of leaking the internal `prod-blue`
+ * deploy-slot name that `ENVIRONMENTS` values carry.
+ */
+const ENV_ALIASES: Record<string, string> = {
+  production: 'prod-green',
+  preprod: 'prod-blue',
+  qa: 'test-in',
+};
+
+/**
+ * Resolves a `?environment=` query value — an alias (`production`) or a raw
+ * `ENVIRONMENTS` value (`prod-green`) — to a known environment, or null if it
+ * matches neither.
+ */
+export function resolveEnvParam(raw: string | null): string | null {
+  if (!raw) return null;
+  const normalized = raw.toLowerCase();
+  if (ENV_ALIASES[normalized]) return ENV_ALIASES[normalized];
+  return ENVIRONMENTS.some((e) => e.value === raw) ? raw : null;
+}
+
 export function envLabel(env: string): string {
   return ENVIRONMENTS.find((e) => e.value === env)?.label ?? env;
 }
