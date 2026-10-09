@@ -8,7 +8,6 @@ import {
   DEFAULT_ENV,
   displayVersion,
   ENVIRONMENTS,
-  envLabel,
   fetchReleasesPage,
   formatBuiltAt,
   formatSize,
@@ -17,6 +16,7 @@ import {
   releasesForApp,
   releaseVersion,
   RELEASES_URL,
+  resolveEnvParam,
   type AppConfig,
   type Asset,
   type Release,
@@ -184,9 +184,12 @@ export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
     setFailed(false);
     setLoadMoreFailed(false);
     setHighlightTag(null);
-    setPendingBuild(
-      decodeBuildId(new URLSearchParams(window.location.search).get('b')),
-    );
+    const params = new URLSearchParams(window.location.search);
+    setPendingBuild(decodeBuildId(params.get('b')));
+    const queryEnv = app.hasEnvironments
+      ? resolveEnvParam(params.get('environment'))
+      : null;
+    setEnv(queryEnv ?? DEFAULT_ENV);
     loadNextPage(1);
     return () => {
       liveRef.current = false;
@@ -280,23 +283,6 @@ export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
           </p>
         )}
 
-        {!pending && !failed && app.hasEnvironments && (
-          <div className={styles.filtersGroup}>
-            <span className={styles.panelLabel}>Environment</span>
-            <div className={styles.filters}>
-              {ENVIRONMENTS.map((e) => (
-                <button
-                  key={e.value}
-                  type="button"
-                  className={clsx(e.value === env && styles.selected)}
-                  onClick={() => setEnv(e.value)}>
-                  {e.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {!pending && !failed && (
           <div className={styles.versionsPanel}>
             <span className={styles.panelLabel}>Versions</span>
@@ -304,8 +290,8 @@ export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
               {releases.map((r, i) => {
                 const rowVersion = displayVersion(app, r);
                 const rowAsset = installerFor(app, r, env);
-                const rowBuiltAt =
-                  rowAsset && parseInstaller(app, rowAsset.name)?.builtAt;
+                if (!rowAsset) return null;
+                const rowBuiltAt = parseInstaller(app, rowAsset.name)?.builtAt;
                 return (
                   <li
                     key={r.tag}
@@ -326,53 +312,39 @@ export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
                       </span>
                     </span>
 
-                    {rowAsset ? (
-                      <>
-                        {rowBuiltAt && (
-                          <span className={styles.builtAt}>
-                            Built {formatBuiltAt(rowBuiltAt)}
-                          </span>
-                        )}
-                        <span className={styles.size}>
-                          {formatSize(rowAsset.size)}
-                        </span>
-                        <div className={styles.actions}>
-                          <button
-                            type="button"
-                            className={styles.downloadButton}
-                            onClick={() => downloadAsset(rowAsset)}>
-                            <DownloadIcon />
-                            Download
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.shareButton}
-                            aria-label={
-                              copiedTag === r.tag
-                                ? 'Link copied'
-                                : 'Copy link to this build'
-                            }
-                            title={
-                              copiedTag === r.tag
-                                ? 'Link copied'
-                                : 'Copy link to this build'
-                            }
-                            onClick={() => copyLink(rowVersion, r.tag)}>
-                            {copiedTag === r.tag ? (
-                              <CheckIcon />
-                            ) : (
-                              <ShareIcon />
-                            )}
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <span className={styles.unavailable}>
-                        {app.hasEnvironments
-                          ? `Not built for ${envLabel(env)}`
-                          : 'Not available'}
+                    {rowBuiltAt && (
+                      <span className={styles.builtAt}>
+                        Built {formatBuiltAt(rowBuiltAt)}
                       </span>
                     )}
+                    <span className={styles.size}>
+                      {formatSize(rowAsset.size)}
+                    </span>
+                    <div className={styles.actions}>
+                      <button
+                        type="button"
+                        className={styles.downloadButton}
+                        onClick={() => downloadAsset(rowAsset)}>
+                        <DownloadIcon />
+                        Download
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.shareButton}
+                        aria-label={
+                          copiedTag === r.tag
+                            ? 'Link copied'
+                            : 'Copy link to this build'
+                        }
+                        title={
+                          copiedTag === r.tag
+                            ? 'Link copied'
+                            : 'Copy link to this build'
+                        }
+                        onClick={() => copyLink(rowVersion, r.tag)}>
+                        {copiedTag === r.tag ? <CheckIcon /> : <ShareIcon />}
+                      </button>
+                    </div>
                   </li>
                 );
               })}
