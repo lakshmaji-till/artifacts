@@ -11,7 +11,7 @@ import useBaseUrl from '@docusaurus/useBaseUrl';
 
 import styles from './styles.module.css';
 
-const SLIDE_COUNT = 6;
+const SLIDE_COUNT = 8;
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
@@ -28,6 +28,8 @@ export default function OtaDeck(): ReactNode {
   const [index, setIndex] = useState(0);
   const frameRef = useRef<HTMLDivElement>(null);
   const scratUrl = useBaseUrl('img/scrat.png');
+  const editPanelUrl = useBaseUrl('img/orbit-bundle-edit-panel.png');
+  const bundlesListUrl = useBaseUrl('img/orbit-bundles-list.png');
 
   const go = useCallback((n: number) => {
     setIndex(Math.max(0, Math.min(SLIDE_COUNT - 1, n)));
@@ -264,6 +266,26 @@ export default function OtaDeck(): ReactNode {
                   software we didn’t sign. And step 02 is a deliberate human
                   decision: <b>building a version doesn’t send it to anyone.</b>
                 </p>
+                <div className={clsx(styles.evidence, styles.r)}>
+                  <figure className={styles.shot}>
+                    <img
+                      src={editPanelUrl}
+                      alt="Orbit bundle editor showing target organisations, Enabled and Force Update toggles"
+                    />
+                    <figcaption>
+                      Step 02, in Orbit — choosing who gets it
+                    </figcaption>
+                  </figure>
+                  <figure className={styles.shot}>
+                    <img
+                      src={bundlesListUrl}
+                      alt="Orbit bundles list showing platform, target version, device counts and enabled status"
+                    />
+                    <figcaption>
+                      Step 05, in Orbit — every release, and who’s on it
+                    </figcaption>
+                  </figure>
+                </div>
               </div>
             </>,
           )}
@@ -376,9 +398,167 @@ export default function OtaDeck(): ReactNode {
             </>,
           )}
 
-          {/* 6 · thank you */}
+          {/* 6 · android & ios */}
           {slide(
             5,
+            '',
+            <>
+              <div className={clsx(styles.r, styles.eyebrow)}>
+                Android &amp; iOS — one caveat
+              </div>
+              <div className={styles.split}>
+                <div className={clsx(styles.col, styles.colLeft, styles.r)}>
+                  <span className={clsx(styles.tag, styles.tagBad)}>
+                    Native changes
+                  </span>
+                  <h3>
+                    Ships the old way.
+                    <br />
+                    No OTA.
+                  </h3>
+                  <ul>
+                    <li>
+                      The release touches <b>native code</b> — new
+                      permissions, SDKs, or platform-level changes.
+                    </li>
+                    <li>OTA can’t carry that kind of change.</li>
+                    <li>
+                      The APK/build is <b>shared directly</b>, and the regular
+                      install process is followed.
+                    </li>
+                  </ul>
+                </div>
+                <div className={clsx(styles.divider, styles.r)} />
+                <div className={clsx(styles.col, styles.colRight, styles.r)}>
+                  <span className={clsx(styles.tag, styles.tagGood)}>
+                    No native changes
+                  </span>
+                  <h3>
+                    Rides OTA,
+                    <br />
+                    same as Windows.
+                  </h3>
+                  <ul>
+                    <li>
+                      Just app code — <b>OTA-eligible</b> on Android and iOS
+                      too.
+                    </li>
+                    <li>
+                      Same <b>organisation-based rollout</b>: choose in Orbit,
+                      devices pick it up.
+                    </li>
+                    <li>
+                      One process across Windows, Android and iOS whenever
+                      native code isn’t involved.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div className={clsx(styles.r, styles.future)}>
+                <span className={styles.flabel}>Rule of thumb</span>
+                Native code in the release means a real install. Everything
+                else is <b>OTA — no exceptions per platform.</b>
+              </div>
+            </>,
+          )}
+
+          {/* 7 · windows one-time setup */}
+          {slide(
+            6,
+            '',
+            <>
+              <div className={clsx(styles.r, styles.eyebrow)}>
+                Windows — one-time setup, from v7.46.7
+              </div>
+              <div className={clsx(styles.prereq, styles.r)}>
+                <span className={styles.prereqTitle}>
+                  Before uninstalling
+                </span>
+                <ul>
+                  <li>
+                    POS is <b>online</b> and connected to the network.
+                  </li>
+                  <li>
+                    All pending events/data have been{' '}
+                    <b>successfully synced</b>.
+                  </li>
+                  <li>
+                    <b>No pending events</b> remain — never uninstall while
+                    offline or syncing.
+                  </li>
+                </ul>
+              </div>
+              <div className={clsx(styles.flow, styles.flow4, styles.r)}>
+                <div className={styles.step}>
+                  <div className={styles.node}>01</div>
+                  <div className={styles.st}>Uninstall</div>
+                  <p>Remove the currently installed POS app from Windows.</p>
+                </div>
+                <div className={styles.step}>
+                  <div className={styles.node}>02</div>
+                  <div className={styles.st}>Delete data</div>
+                  <p>
+                    Remove the leftover POS folders — details on the right.
+                  </p>
+                </div>
+                <div className={styles.step}>
+                  <div className={styles.node}>03</div>
+                  <div className={styles.st}>Install</div>
+                  <p>
+                    Install <b>POS v7.46.7</b>. All organisations are already
+                    in this bundle.
+                  </p>
+                </div>
+                <div className={styles.step}>
+                  <div className={styles.node}>04</div>
+                  <div className={styles.st}>Log in</div>
+                  <p>Launch POS, the customer logs in, and it’s ready.</p>
+                </div>
+              </div>
+              <div className={clsx(styles.hr, styles.hrTight, styles.r)} />
+              <div className={clsx(styles.setupDetail, styles.r)}>
+                <div className={styles.folders}>
+                  <span className={styles.flabel}>Step 02 · what to delete</span>
+                  <ul>
+                    <li>
+                      <b>Program Files</b> —{' '}
+                      <code className={styles.path}>
+                        C:\Program Files\POS
+                      </code>{' '}
+                      and{' '}
+                      <code className={styles.path}>
+                        C:\Program Files\Oolio Pty Ltd
+                      </code>
+                    </li>
+                    <li>
+                      <b>AppData</b> (Local and Roaming) —{' '}
+                      <code className={styles.path}>POS</code>,{' '}
+                      <code className={styles.path}>POS.exe</code>,{' '}
+                      <code className={styles.path}>Oolio Pty Ltd</code>
+                    </li>
+                    <li>
+                      Exception: if <b>CDS</b> is present inside Oolio Pty
+                      Ltd, leave that folder in place.
+                    </li>
+                  </ul>
+                </div>
+                <div className={styles.shotPlaceholder}>
+                  Screenshot — Windows folders to delete
+                </div>
+              </div>
+              <p className={clsx(styles.note, styles.r)}>
+                Newly onboarded organisation? Ask the POS team to add its
+                Organization ID to the bundle first.{' '}
+                <b>
+                  No manual reinstall is needed for OTA releases after this.
+                </b>
+              </p>
+            </>,
+          )}
+
+          {/* 8 · thank you */}
+          {slide(
+            7,
             styles.thanks,
             <>
               <div className={clsx(styles.r, styles.eyebrow)}>
