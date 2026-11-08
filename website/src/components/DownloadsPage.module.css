@@ -187,12 +187,9 @@
   color: var(--ifm-color-primary);
 }
 
-.sentinel {
-  min-height: 1px;
-}
-
 .loadingMore,
-.loadMoreFailed {
+.loadMoreFailed,
+.loadMore {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -202,7 +199,8 @@
   color: var(--ifm-color-emphasis-600);
 }
 
-.loadMoreFailed button {
+.loadMoreFailed button,
+.loadMore button {
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 999px;
   background: none;
@@ -214,7 +212,8 @@
   cursor: pointer;
 }
 
-.loadMoreFailed button:hover {
+.loadMoreFailed button:hover,
+.loadMore button:hover {
   background: var(--ifm-color-emphasis-100);
 }
 
