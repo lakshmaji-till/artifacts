@@ -224,22 +224,6 @@ export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [releases, hasMore]);
 
-  // Fetches the next page once the sentinel row scrolls near the viewport.
-  const sentinelRef = useRef<HTMLLIElement>(null);
-  useEffect(() => {
-    if (!hasMore) return;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) loadNextPage(rawPage);
-      },
-      {rootMargin: '200px'},
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [hasMore, rawPage, loadNextPage]);
-
   // Triggers the download from a real <button>, not a visible <a> — so
   // hovering it never shows the asset's raw URL in the browser's link
   // preview the way a styled anchor would.
@@ -348,10 +332,14 @@ export default function DownloadsPage({app}: {app: AppConfig}): ReactNode {
                   </li>
                 );
               })}
-              {hasMore && (
-                <li ref={sentinelRef} className={styles.sentinel} aria-hidden="true" />
-              )}
             </ul>
+            {hasMore && !loadingMore && !loadMoreFailed && (
+              <p className={styles.loadMore}>
+                <button type="button" onClick={() => loadNextPage(rawPage)}>
+                  Load more
+                </button>
+              </p>
+            )}
             {loadingMore && (
               <p className={styles.loadingMore}>Loading more…</p>
             )}

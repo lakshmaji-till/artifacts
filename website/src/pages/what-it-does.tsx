@@ -14,8 +14,9 @@ export default function WhatItDoes(): ReactNode {
       <div className={clsx('container', styles.page)}>
         <Heading as="h1">What it does</Heading>
         <p className={styles.lede}>
-          POS Desktop updates itself over the air. Six slides on how that works,
-          what it gives us, and what to watch out for.
+          POS Desktop updates itself over the air. Eight slides on how that
+          works, what it gives us, what to watch out for, and how to set a
+          Windows device up for it.
         </p>
 
         <OtaDeck />
